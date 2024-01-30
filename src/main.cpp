@@ -4,8 +4,7 @@
 #define MAX_RPS 300
 #define TIMEOUT_MILLIS 50
 #define DEADZONE 3
-// #define DEBUG
-
+#define DEBUG
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
 BLDCMotor motor = BLDCMotor(7, 0.1);
@@ -14,10 +13,11 @@ BLDCMotor motor = BLDCMotor(7, 0.1);
 BLDCDriver6PWM driver = BLDCDriver6PWM(A_PHASE_UH, A_PHASE_UL, A_PHASE_VH, A_PHASE_VL, A_PHASE_WH, A_PHASE_WL);
 
 // position / angle sensor instance
-MagneticSensorI2C sensor = MagneticSensorI2C(AS5600_I2C);
+MagneticSensorI2C sensor = MagneticSensorI2C(AS5048_I2C);
 
 // inline current sense instance InlineCurrentSense(R, gain, phA, phB, phC)
 InlineCurrentSense currentsense = InlineCurrentSense(0.003, -64.0/7.0, A_OP1_OUT, A_OP2_OUT, A_OP3_OUT);
+
 
 // commander instance
 #ifdef DEBUG
@@ -57,12 +57,13 @@ void setup() {
     // set power supply voltage
     driver.voltage_power_supply = 12;
     // set driver voltage limit, this phase voltage
-    driver.voltage_limit = 14;
+    driver.voltage_limit = 12;
     // initialize driver
     driver.init();
     // link driver to motor
     motor.linkDriver(&driver);
     // link driver to current sense
+    currentsense.driverAlign(&driver,5);
     currentsense.driverSync(&driver);
     // set motion control type to torque (default)
     motor.controller = MotionControlType::velocity;
@@ -114,6 +115,7 @@ void loop() {
     // main FOC algorithm function
     // the faster you run this function the better
     motor.loopFOC();
+    #ifndef DEBUG
     int pulse = servoPulse;
     if(pulse < 1500 + DEADZONE && pulse > 1500 - DEADZONE)
         pulse = 1500;
@@ -128,10 +130,12 @@ void loop() {
         motor.enable();
         motoren = true;
     }
-
     motor.move(target);
+    #endif
+    
 
     #ifdef DEBUG
+    motor.move();
     // significantly slowing the execution down
     motor.monitor();
 
