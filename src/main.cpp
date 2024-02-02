@@ -23,7 +23,6 @@ LowsideCurrentSense currentsense = LowsideCurrentSense(0.003, -64.0/7.0, A_OP1_O
 Commander command = Commander(Serial);
 void doTarget(char* cmd){command.motor(&motor, cmd);}
 #endif
-//angle control P 20, all others 0
 
 volatile uint16_t servoPulse = 1500;
 volatile uint32_t last_isr = 0;
@@ -49,7 +48,6 @@ void rapidHammer(char* a){
 }
 
 void setup() {
-    motor.voltage_sensor_align = 0.5f;
     // driver.pwm_frequency = 15000;
     // set I2C clock speed
     Wire.setClock(400000);
@@ -70,7 +68,7 @@ void setup() {
     currentsense.skip_align = true;
     motor.linkCurrentSense(&currentsense);
     
-    motor.voltage_sensor_align = 3;
+    motor.voltage_sensor_align = 1;
     motor.velocity_index_search = 3;
 
 
@@ -89,7 +87,7 @@ void setup() {
     motor.PID_velocity.I = 0.5;
     motor.PID_velocity.D = 0.01;
     motor.PID_velocity.output_ramp = 1000;
-    motor.PID_velocity.limit = 15;
+    motor.PID_velocity.limit = 20;
     motor.LPF_velocity.Tf = 0.07;
 
 
@@ -174,7 +172,6 @@ void loop() {
     
     // significantly slowing the execution down
     motor.monitor();
-
     // user communication
     command.run();
     #endif
