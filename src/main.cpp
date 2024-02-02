@@ -7,7 +7,7 @@
 #define DEBUG
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
-BLDCMotor motor = BLDCMotor(7, 0.1);
+BLDCMotor motor = BLDCMotor(7, 0.1, 1400);
 
 // BLDC driver instance BLDCDriver6PWM(phA_h, phA_l, phB_h, phB_l, phC_h, phC_l, (en))
 BLDCDriver6PWM driver = BLDCDriver6PWM(A_PHASE_UH, A_PHASE_UL, A_PHASE_VH, A_PHASE_VL, A_PHASE_WH, A_PHASE_WL);
@@ -16,8 +16,7 @@ BLDCDriver6PWM driver = BLDCDriver6PWM(A_PHASE_UH, A_PHASE_UL, A_PHASE_VH, A_PHA
 MagneticSensorI2C sensor = MagneticSensorI2C(AS5048_I2C);
 
 // inline current sense instance InlineCurrentSense(R, gain, phA, phB, phC)
-InlineCurrentSense currentsense = InlineCurrentSense(0.003, -64.0/7.0, A_OP1_OUT, A_OP2_OUT, A_OP3_OUT);
-
+LowsideCurrentSense currentsense = LowsideCurrentSense(0.003, -64.0/7.0, A_OP1_OUT, A_OP2_OUT, A_OP3_OUT);
 
 // commander instance
 #ifdef DEBUG
@@ -43,11 +42,15 @@ void ServoPulseUpdate() {
     }
 }
 
+int hammer = 0;
+
+void rapidHammer(char* a){
+    hammer = atoi(a);
+}
+
 void setup() {
-    // // start serial
-    #ifdef DEBUG
-    Serial.begin(115200);
-    #endif
+    motor.voltage_sensor_align = 0.5f;
+    // driver.pwm_frequency = 15000;
     // set I2C clock speed
     Wire.setClock(400000);
     // initialize sensor
@@ -56,50 +59,58 @@ void setup() {
     motor.linkSensor(&sensor);
     // set power supply voltage
     driver.voltage_power_supply = 12;
-    // set driver voltage limit, this phase voltage
-    driver.voltage_limit = 12;
     // initialize driver
     driver.init();
     // link driver to motor
     motor.linkDriver(&driver);
-    // link driver to current sense
-    currentsense.driverAlign(&driver,5);
-    currentsense.driverSync(&driver);
+    delay(5);
+    currentsense.linkDriver(&driver);
+    delay(5);
+    currentsense.init();
+    currentsense.skip_align = true;
+    motor.linkCurrentSense(&currentsense);
+    
+    motor.voltage_sensor_align = 3;
+    motor.velocity_index_search = 3;
+
+
+
     // set motion control type to torque (default)
-    motor.controller = MotionControlType::velocity;
+    motor.controller = MotionControlType::angle;
 
     // set torque control type to voltage (default)
     motor.torque_controller = TorqueControlType::voltage;
 
     // set FOC modulation type to sinusoidal
-    motor.foc_modulation = FOCModulationType::SinePWM;
+    motor.foc_modulation = FOCModulationType::SpaceVectorPWM;
 
     // velocity PID controller
-    motor.PID_velocity.P = 0.3;
-    motor.PID_velocity.I = 20;
-    motor.PID_velocity.D = 0.001;
-    motor.PID_velocity.limit = 400;
+    motor.PID_velocity.P = 3;
+    motor.PID_velocity.I = 0.5;
+    motor.PID_velocity.D = 0.01;
+    motor.PID_velocity.output_ramp = 1000;
+    motor.PID_velocity.limit = 15;
+    motor.LPF_velocity.Tf = 0.07;
+
+
+    motor.P_angle.P = 6;
+    motor.P_angle.I = 0.2;
+    motor.P_angle.D = 0.05;
+    motor.P_angle.output_ramp = 500;
+
+    motor.LPF_angle = 0.1;
+
     // set motor voltage limit, this limits Vq
     motor.voltage_limit = 13;
     // set motor velocity limit
     motor.velocity_limit = 70000;
     // set motor current limit, this limits Iq
-    motor.current_limit = 11;
+    motor.current_limit = 10;
 
-    // use monitoring
-    #ifdef DEBUG
-    motor.useMonitoring(Serial);
-    char temp = 'm';
-    command.add('M', doTarget, &temp);
-    #endif
 
+    
     // initialize motor
     motor.init();
-
-    // initialize current sensing and link it to the motor
-    // https://docs.simplefoc.com/inline_current_sense#where-to-place-the-current_sense-configuration-in-your-foc-code
-    currentsense.init();
-    motor.linkCurrentSense(&currentsense);
 
     // align sensor and start FOC
     motor.initFOC();
@@ -109,6 +120,16 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(A_PWM), ServoPulseUpdate, CHANGE);
     motor.enable();
     motoren = true;
+
+    // use monitoring
+    #ifdef DEBUG
+    // start serial
+    Serial.begin(115200);
+    motor.useMonitoring(Serial);
+    char temp = 'm';
+    command.add('M', doTarget, &temp);
+    command.add('L', rapidHammer,"rapid hammer");
+    #endif
 }
 
 void loop() {
@@ -135,7 +156,22 @@ void loop() {
     
 
     #ifdef DEBUG
-    motor.move();
+    static int lastmillis = millis();
+    static int point = 0;
+    if(hammer != 0){
+        if(millis() - lastmillis > 250) {
+            lastmillis = millis();
+        }
+        if(millis() - lastmillis < 125) {
+            point = hammer;
+        } else {
+            point = 0;
+        }
+        motor.move(point);
+    } else {
+        motor.move();
+    }
+    
     // significantly slowing the execution down
     motor.monitor();
 
