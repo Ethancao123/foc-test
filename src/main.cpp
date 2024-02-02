@@ -41,11 +41,6 @@ void ServoPulseUpdate() {
     }
 }
 
-int hammer = 0;
-
-void rapidHammer(char* a){
-    hammer = atoi(a);
-}
 
 void setup() {
     // driver.pwm_frequency = 15000;
@@ -126,7 +121,6 @@ void setup() {
     motor.useMonitoring(Serial);
     char temp = 'm';
     command.add('M', doTarget, &temp);
-    command.add('L', rapidHammer,"rapid hammer");
     #endif
 }
 
@@ -154,21 +148,7 @@ void loop() {
     
 
     #ifdef DEBUG
-    static int lastmillis = millis();
-    static int point = 0;
-    if(hammer != 0){
-        if(millis() - lastmillis > 250) {
-            lastmillis = millis();
-        }
-        if(millis() - lastmillis < 125) {
-            point = hammer;
-        } else {
-            point = 0;
-        }
-        motor.move(point);
-    } else {
-        motor.move();
-    }
+    motor.move();
     
     // significantly slowing the execution down
     motor.monitor();
