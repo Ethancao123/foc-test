@@ -5,6 +5,7 @@
 #define TIMEOUT_MILLIS 50
 #define DEADZONE 3
 #define DEBUG
+#define REVERSED 1 //Used in macros 1 for conventional, -1 for reverse
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
 BLDCMotor motor = BLDCMotor(7, 0.1, 1400);
@@ -28,6 +29,11 @@ volatile uint16_t servoPulse = 1500;
 volatile uint32_t last_isr = 0;
 bool motoren = false;
 
+bool sendHammer = false;
+int maxPowerMillis;
+float hammerTorque;
+
+
 void ServoPulseUpdate() {
     static uint32_t startTime = 0;
     uint32_t curTime = micros();
@@ -41,6 +47,28 @@ void ServoPulseUpdate() {
     }
 }
 
+void initArm(){
+    int startMillis = millis();
+    MotionControlType previous = motor.controller;
+    motor.controller = MotionControlType::velocity;
+    while(millis() - startMillis < 1500){
+        motor.loopFOC();
+        motor.move(-15 * REVERSED);
+    }
+    delay(100);
+    motor.sensor_offset = motor.shaft_angle;
+    motor.move(1);
+    motor.loopFOC();
+    motor.move(1);
+
+    motor.controller = previous;
+}
+
+int Hcommand = 0;
+
+void doHammer(char *a) {
+    Hcommand = atoi(a);
+}
 
 void setup() {
     // driver.pwm_frequency = 15000;
@@ -57,7 +85,7 @@ void setup() {
     // link driver to motor
     motor.linkDriver(&driver);
     delay(5);
-    currentsense.linkDriver(&driver);
+    currentsense.linkDriver(&driver); 
     delay(5);
     currentsense.init();
     currentsense.skip_align = true;
@@ -100,7 +128,8 @@ void setup() {
     // set motor current limit, this limits Iq
     motor.current_limit = 10;
 
-
+    maxPowerMillis = 250;
+    hammerTorque = 30;
     
     // initialize motor
     motor.init();
@@ -109,11 +138,13 @@ void setup() {
     motor.initFOC();
 
     pinMode(A_PWM, INPUT_PULLDOWN);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
     //consider using timer instead
     attachInterrupt(digitalPinToInterrupt(A_PWM), ServoPulseUpdate, CHANGE);
     motor.enable();
     motoren = true;
-
+    initArm();
     // use monitoring
     #ifdef DEBUG
     // start serial
@@ -121,18 +152,23 @@ void setup() {
     motor.useMonitoring(Serial);
     char temp = 'm';
     command.add('M', doTarget, &temp);
+    command.add('H', doHammer, &temp);
     #endif
 }
 
+int hammerStart;
+float preHammerTarget;
+bool prevHammerState = false;
 void loop() {
     // main FOC algorithm function
     // the faster you run this function the better
+    float target = NOT_SET;
     motor.loopFOC();
     #ifndef DEBUG
     int pulse = servoPulse;
     if(pulse < 1500 + DEADZONE && pulse > 1500 - DEADZONE)
         pulse = 1500;
-    int target = map(pulse, 1000, 2000, -MAX_RPS, MAX_RPS);
+    target = map(pulse, 1000, 2000, -MAX_RPS, MAX_RPS);
     
     //failsafe
     if(millis() - last_isr > TIMEOUT_MILLIS) {
@@ -145,10 +181,32 @@ void loop() {
     }
     motor.move(target);
     #endif
+    if(Hcommand) { //switch on
+        if(!prevHammerState) { //if low to high
+            motor.controller = MotionControlType::torque;
+            hammerStart = millis();
+            prevHammerState = Hcommand;
+            preHammerTarget = motor.target;
+        }
+        if(millis() - hammerStart < maxPowerMillis) {
+            target = hammerTorque;
+            digitalWrite(LED_BUILTIN, HIGH);
+        } else {
+            target = 0;
+            digitalWrite(LED_BUILTIN, LOW);
+        }
+    } else { //switch off
+        if(prevHammerState) {
+            motor.controller = MotionControlType::angle;
+            prevHammerState = Hcommand;
+            target = preHammerTarget; 
+        }
+    }
     
+    motor.move(target);
 
     #ifdef DEBUG
-    motor.move();
+    // motor.move();
     
     // significantly slowing the execution down
     motor.monitor();
