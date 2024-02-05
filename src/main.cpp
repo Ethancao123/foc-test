@@ -8,7 +8,7 @@
 #define REVERSED 1 //Used in macros 1 for conventional, -1 for reverse
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
-BLDCMotor motor = BLDCMotor(7, 0.1, 1400);
+BLDCMotor motor = BLDCMotor(7, 0.2, 1750);
 
 // BLDC driver instance BLDCDriver6PWM(phA_h, phA_l, phB_h, phB_l, phC_h, phC_l, (en))
 BLDCDriver6PWM driver = BLDCDriver6PWM(A_PHASE_UH, A_PHASE_UL, A_PHASE_VH, A_PHASE_VL, A_PHASE_WH, A_PHASE_WL);
@@ -49,14 +49,17 @@ void ServoPulseUpdate() {
 
 void initArm(){
     int startMillis = millis();
+    int prevLimit = motor.current_limit;
+    motor.current_limit = 8;
     MotionControlType previous = motor.controller;
     motor.controller = MotionControlType::velocity;
     while(millis() - startMillis < 1500){
         motor.loopFOC();
-        motor.move(-15 * REVERSED);
+        motor.move(-5 * REVERSED);
     }
     delay(100);
     motor.sensor_offset = motor.shaft_angle;
+    motor.current_limit = prevLimit;
     motor.move(1);
     motor.loopFOC();
     motor.move(1);
@@ -71,6 +74,10 @@ void doHammer(char *a) {
 }
 
 void setup() {
+    #ifdef DEBUG
+    Serial.begin(115200);
+    motor.useMonitoring(Serial);
+    #endif
     // driver.pwm_frequency = 15000;
     // set I2C clock speed
     Wire.setClock(400000);
@@ -79,7 +86,7 @@ void setup() {
     // link sensor to motor
     motor.linkSensor(&sensor);
     // set power supply voltage
-    driver.voltage_power_supply = 12;
+    driver.voltage_power_supply = 18;
     // initialize driver
     driver.init();
     // link driver to motor
@@ -122,7 +129,7 @@ void setup() {
     motor.LPF_angle = 0.1;
 
     // set motor voltage limit, this limits Vq
-    motor.voltage_limit = 13;
+    motor.voltage_limit = 18;
     // set motor velocity limit
     motor.velocity_limit = 70000;
     // set motor current limit, this limits Iq
@@ -148,8 +155,6 @@ void setup() {
     // use monitoring
     #ifdef DEBUG
     // start serial
-    Serial.begin(115200);
-    motor.useMonitoring(Serial);
     char temp = 'm';
     command.add('M', doTarget, &temp);
     command.add('H', doHammer, &temp);
