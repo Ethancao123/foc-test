@@ -7,7 +7,7 @@
 #define DEADZONE 3
 #define REVERSED 1 //Used in macros 1 for conventional, -1 for reverse
 #define TORQUE_RANGE 12 //from negative to positive
-#define ANGLE_RANGE 10 //from negative to positive but centered around 2
+#define ANGLE_RANGE 20 //from negative to positive but centered around 2
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
 BLDCMotor motor = BLDCMotor(7, 0.1, 1750, 0.01/1000);
@@ -46,10 +46,10 @@ void ServoPulseUpdate() {
 void initArm(){
     int startMillis = millis();
     int prevLimit = motor.current_limit;
-    motor.current_limit = 8;
+    motor.current_limit = 4;
     MotionControlType previous = motor.controller;
     motor.controller = MotionControlType::velocity;
-    while(millis() - startMillis < 1500){
+    while(millis() - startMillis < 2000){
         motor.loopFOC();
         motor.move(-10 * REVERSED);
     }
@@ -105,10 +105,10 @@ void setup() {
     motor.PID_velocity.limit = 20;
     motor.LPF_velocity.Tf = 0.07;
 
-    motor.P_angle.P = 6;
-    motor.P_angle.I = 0.2;
-    motor.P_angle.D = 0.05;
-    motor.P_angle.output_ramp = 500;
+    motor.P_angle.P = 5;
+    motor.P_angle.I = 0.3;
+    motor.P_angle.D = 0.025;
+    motor.P_angle.output_ramp = 1000;
 
     motor.LPF_angle = 0.1;
     motor.voltage_limit = 18;
@@ -116,7 +116,7 @@ void setup() {
     motor.current_limit = 8;
 
     maxPowerMillis = 250;
-    hammerTorque = 50;
+    hammerTorque = 50; //50
 
     motor.init();
     motor.initFOC();
@@ -144,6 +144,7 @@ void setup() {
 int hammerStart;
 float preHammerTarget;
 bool prevHammerState = false;
+bool resetting = false;
 
 void loop() {
     // main FOC algorithm function
@@ -154,6 +155,13 @@ void loop() {
     #ifndef DEBUG
     int pulse = servoPulse; //prevent interrupt from overriding during loop
     //check for timeout
+    if(resetting && pulse > 1050) {
+        motor.sensor_offset = motor.shaft_angle;
+        resetting = false;
+    }
+    if(pulse < 1900) {
+        prevHammerState = false;
+    }
     if(millis() - last_isr > TIMEOUT_MILLIS || (pulse > 1373 && pulse < 1629)) {
         target = 0;
         motor.disable();
@@ -168,27 +176,30 @@ void loop() {
     }
     else if(pulse < 1916 && pulse > 1658) { //higher range
         motor.controller = MotionControlType::angle;
-        target = map(pulse,1658,1916,-1*ANGLE_RANGE, ANGLE_RANGE);
+        target = map(pulse,1658,1916,0.5, ANGLE_RANGE);
     }
     else if(pulse > 1975){ //peak range
         if(!prevHammerState) { //if low to high
             motor.controller = MotionControlType::torque;
             hammerStart = millis();
-            prevHammerState = Hcommand;
+            prevHammerState = true;
             preHammerTarget = motor.target;
         }
         if(millis() - hammerStart < maxPowerMillis) {
             target = hammerTorque;
             digitalWrite(LED_BUILTIN, HIGH);
         } else {
+            target = 0;
             digitalWrite(LED_BUILTIN, LOW);
         }
-    } else { //switch off
-        if(prevHammerState) {
-            motor.controller = MotionControlType::angle;
-            prevHammerState = Hcommand;
-            target = preHammerTarget; 
-        }
+    } 
+    else if(pulse < 1050){
+        motor.controller = MotionControlType::velocity;
+        target = -8;
+        resetting = true;
+    }
+    else { //switch off
+        1+1;
     }
     #endif
     motor.move(target);
