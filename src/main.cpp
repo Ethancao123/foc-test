@@ -8,6 +8,7 @@
 #define REVERSED 1 //Used in macros 1 for conventional, -1 for reverse
 #define TORQUE_RANGE 12 //from negative to positive
 #define ANGLE_RANGE 20 //from negative to positive but centered around 2
+#define CUR_LIMIT 12
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
 BLDCMotor motor = BLDCMotor(7, 0.1, 1750, 0.01/1000);
@@ -49,7 +50,7 @@ void initArm(){
     motor.current_limit = 4;
     MotionControlType previous = motor.controller;
     motor.controller = MotionControlType::velocity;
-    while(millis() - startMillis < 2000){
+    while(millis() - startMillis < 1000){
         motor.loopFOC();
         motor.move(-10 * REVERSED);
     }
@@ -99,21 +100,21 @@ void setup() {
 
     // velocity PID controller
     motor.PID_velocity.P = 3;
-    motor.PID_velocity.I = 0.5;
-    motor.PID_velocity.D = 0.01;
+    motor.PID_velocity.I = 0.7;
+    motor.PID_velocity.D = 0.05;
     motor.PID_velocity.output_ramp = 1000;
     motor.PID_velocity.limit = 20;
-    motor.LPF_velocity.Tf = 0.07;
+    motor.LPF_velocity.Tf = 0.03;
 
-    motor.P_angle.P = 5;
+    motor.P_angle.P = 3;
     motor.P_angle.I = 0.3;
-    motor.P_angle.D = 0.025;
+    motor.P_angle.D = 0.05;
     motor.P_angle.output_ramp = 1000;
 
-    motor.LPF_angle = 0.1;
+    motor.LPF_angle = 0.01;
     motor.voltage_limit = 18;
     motor.velocity_limit = 70000;
-    motor.current_limit = 8;
+    motor.current_limit = CUR_LIMIT;
 
     maxPowerMillis = 250;
     hammerTorque = 50; //50
@@ -162,7 +163,7 @@ void loop() {
     if(pulse < 1900) {
         prevHammerState = false;
     }
-    if(millis() - last_isr > TIMEOUT_MILLIS || (pulse > 1373 && pulse < 1629)) {
+    if(millis() - last_isr > TIMEOUT_MILLIS || (pulse > 1373 && pulse < 1690)) { // also disable if angle is low
         target = 0;
         motor.disable();
         motoren = false;
@@ -176,7 +177,7 @@ void loop() {
     }
     else if(pulse < 1916 && pulse > 1658) { //higher range
         motor.controller = MotionControlType::angle;
-        target = map(pulse,1658,1916,0.5, ANGLE_RANGE);
+        target = map(pulse,1658,1916,0.2, ANGLE_RANGE);
     }
     else if(pulse > 1975){ //peak range
         if(!prevHammerState) { //if low to high
