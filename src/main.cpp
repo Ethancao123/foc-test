@@ -37,7 +37,7 @@ void ServoPulseUpdate() {
     if (digitalRead(A_PWM)) // Pin transitioned from low to high
         startTime = curTime; // Start counting pulse time
     else // Pin transitioned from high to low
-    servoPulse = (uint16_t)(curTime - startTime);
+        servoPulse = (uint16_t)(curTime - startTime);
     if(servoPulse <= 2200 && servoPulse >= 800) {
         last_isr = millis();
     }
@@ -78,7 +78,7 @@ void setup() {
     // link sensor to motor
     motor.linkSensor(&sensor);
     // set power supply voltage
-    driver.voltage_power_supply = 12;
+    driver.voltage_power_supply = 13;
     // initialize driver
     driver.init();
     // link driver to motor
@@ -90,8 +90,8 @@ void setup() {
     currentsense.skip_align = true;
     motor.linkCurrentSense(&currentsense);
     
-    motor.voltage_sensor_align = 1.75;
-    motor.velocity_index_search = 6;
+    motor.voltage_sensor_align = 2;
+    motor.velocity_index_search = 3;
 
     motor.controller = MotionControlType::angle;
     motor.torque_controller = TorqueControlType::voltage;
@@ -116,8 +116,8 @@ void setup() {
     motor.velocity_limit = 70000;
     motor.current_limit = CUR_LIMIT;
 
-    maxPowerMillis = 250;
-    hammerTorque = 50; //50
+    maxPowerMillis = 200;
+    hammerTorque = 50;
 
     motor.init();
     motor.initFOC();
@@ -177,7 +177,7 @@ void loop() {
     }
     else if(pulse < 1916 && pulse > 1658) { //higher range
         motor.controller = MotionControlType::angle;
-        target = map(pulse,1658,1916,0.2, ANGLE_RANGE);
+        target = map(pulse,1690,1916,0.1, ANGLE_RANGE);
     }
     else if(pulse > 1975){ //peak range
         if(!prevHammerState) { //if low to high
