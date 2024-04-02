@@ -6,9 +6,9 @@
 #define TIMEOUT_MILLIS 50
 #define DEADZONE 3
 #define REVERSED 1 //Used in macros 1 for conventional, -1 for reverse
-#define TORQUE_RANGE 12 //from negative to positive
+#define TORQUE_RANGE 20 //from negative to positive
 #define ANGLE_RANGE 20 //from negative to positive but centered around 2
-#define CUR_LIMIT 12
+#define CUR_LIMIT 15
 
 // BLDC motor instance BLDCMotor(polepairs, (R), (KV 1100))
 BLDCMotor motor = BLDCMotor(7, 0.1, 1750, 0.01/1000);
@@ -90,7 +90,7 @@ void setup() {
     currentsense.skip_align = true;
     motor.linkCurrentSense(&currentsense);
     
-    motor.voltage_sensor_align = 1.25;
+    motor.voltage_sensor_align = 1.75;
     motor.velocity_index_search = 6;
 
     motor.controller = MotionControlType::angle;
@@ -106,7 +106,7 @@ void setup() {
     motor.PID_velocity.limit = 20;
     motor.LPF_velocity.Tf = 0.03;
 
-    motor.P_angle.P = 3;
+    motor.P_angle.P = 5;
     motor.P_angle.I = 0.3;
     motor.P_angle.D = 0.05;
     motor.P_angle.output_ramp = 1000;
